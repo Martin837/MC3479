@@ -20,19 +20,19 @@ uint8_t CfgRange, CfgFifo;
 #define SPI_PORT spi0
 #define I2C_PORT i2c0
 
-uint8_t MC34X9::readRegister8(uint8_t reg) {
+uint8_t MC34X9 readRegister8(uint8_t reg) {
   uint8_t value;
   mcube_read_regs(M_bSpi, M_chip_select, reg, &value, 1);
   return value;
 }
 
-void MC34X9::writeRegister8(uint8_t reg, uint8_t value) {
+void MC34X9 writeRegister8(uint8_t reg, uint8_t value) {
   mcube_write_regs(M_bSpi, M_chip_select, reg, &value, 1);
   return;
 }
 
 // Initialize the MC34X9 sensor and set as the default configuration
-bool MC34X9::start(bool bSpi, uint8_t chip_select)
+bool MC34X9 start(bool bSpi, uint8_t chip_select)
 {
   /** 0 = SPI, 1 = I2C */
   M_bSpi = bSpi;
@@ -78,20 +78,20 @@ bool MC34X9::start(bool bSpi, uint8_t chip_select)
   return true;
 }
 
-void MC34X9::wake()
+void MC34X9 wake()
 {
   //Set mode as wake
   SetMode(MC34X9_MODE_CWAKE);
 }
 
-void MC34X9::stop()
+void MC34X9 stop()
 {
   //Set mode as Sleep
   SetMode(MC34X9_MODE_STANDBY);
 }
 
 //Initial reset
-void MC34X9::reset()
+void MC34X9 reset()
 {
   // Stand by mode
   writeRegister8(MC34X9_REG_MODE, MC34X9_MODE_STANDBY);
@@ -116,7 +116,7 @@ void MC34X9::reset()
 }
 
 //Set the operation mode
-void MC34X9::SetMode(MC34X9_mode_t mode)
+void MC34X9 SetMode(MC34X9_mode_t mode)
 {
   uint8_t value;
 
@@ -128,7 +128,7 @@ void MC34X9::SetMode(MC34X9_mode_t mode)
 }
 
 //Set the range control
-void MC34X9::SetRangeCtrl(MC34X9_range_t range)
+void MC34X9 SetRangeCtrl(MC34X9_range_t range)
 {
   uint8_t value;
   CfgRange = range;
@@ -140,7 +140,7 @@ void MC34X9::SetRangeCtrl(MC34X9_range_t range)
 }
 
 //Set the sampling rate
-void MC34X9::SetSampleRate(MC34X9_sr_t sample_rate)
+void MC34X9 SetSampleRate(MC34X9_sr_t sample_rate)
 {
   uint8_t value;
   SetMode(MC34X9_MODE_STANDBY);
@@ -151,7 +151,7 @@ void MC34X9::SetSampleRate(MC34X9_sr_t sample_rate)
 }
 
 // Set Motion feature
-void MC34X9::SetMotionCtrl(bool tilt_ctrl,
+void MC34X9 SetMotionCtrl(bool tilt_ctrl,
                            bool flip_ctl,
                            bool anym_ctl,
                            bool shake_ctl,
@@ -184,7 +184,7 @@ void MC34X9::SetMotionCtrl(bool tilt_ctrl,
 }
 
 //Set FIFO feature
-void MC34X9::SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl,
+void MC34X9 SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl,
                          MC34X9_fifo_mode_t fifo_mode,
                          uint8_t fifo_thr)
 {
@@ -201,7 +201,7 @@ void MC34X9::SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl,
   writeRegister8(MC34X9_REG_FIFO_TH, CfgFifoThr);
 }
 
-void MC34X9::SetGerneralINTCtrl() {
+void MC34X9 SetGerneralINTCtrl() {
   // Gerneral Interrupt setup
   uint8_t CfgGPIOINT = (((MC34X9_INTR_C_IAH_ACTIVE_LOW & 0x01) << 2) // int1
                         | ((MC34X9_INTR_C_IPP_MODE_OPEN_DRAIN & 0x01) << 3)// int1
@@ -212,7 +212,7 @@ void MC34X9::SetGerneralINTCtrl() {
 }
 
 //Set interrupt control register
-void MC34X9::SetINTCtrl(bool tilt_int_ctrl,
+void MC34X9 SetINTCtrl(bool tilt_int_ctrl,
                         bool flip_int_ctl,
                         bool anym_int_ctl,
                         bool shake_int_ctl,
@@ -232,7 +232,7 @@ void MC34X9::SetINTCtrl(bool tilt_int_ctrl,
 }
 
 //Set FIFO interrupt control register
-void MC34X9::SetFIFOINTCtrl(bool fifo_empty_int_ctl,
+void MC34X9 SetFIFOINTCtrl(bool fifo_empty_int_ctl,
                             bool fifo_full_int_ctl,
                             bool fifo_thr_int_ctl)
 {
@@ -249,7 +249,7 @@ void MC34X9::SetFIFOINTCtrl(bool fifo_empty_int_ctl,
 }
 
 //Interrupt handler (clear interrupt flag)
-void MC34X9::INTHandler(MC34X9_interrupt_event_t *ptINT_Event)
+void MC34X9 INTHandler(MC34X9_interrupt_event_t *ptINT_Event)
 {
   uint8_t value;
 
@@ -266,7 +266,7 @@ void MC34X9::INTHandler(MC34X9_interrupt_event_t *ptINT_Event)
 }
 
 //FIFO Interrupt handler (clear interrupt flag)
-void MC34X9::FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
+void MC34X9 FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
 {
   uint8_t value;
 
@@ -278,7 +278,7 @@ void MC34X9::FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
 }
 
 //Get the range control
-MC34X9_range_t MC34X9::GetRangeCtrl(void)
+MC34X9_range_t MC34X9 GetRangeCtrl(void)
 {
   // Read the data format register to preserve bits
   uint8_t value;
@@ -290,7 +290,7 @@ MC34X9_range_t MC34X9::GetRangeCtrl(void)
 }
 
 //Get the output sampling rate
-MC34X9_sr_t MC34X9::GetSampleRate(void)
+MC34X9_sr_t MC34X9 GetSampleRate(void)
 {
   // Read the data format register to preserve bits
   uint8_t value;
@@ -302,7 +302,7 @@ MC34X9_sr_t MC34X9::GetSampleRate(void)
 }
 
 //Is FIFO empty
-bool MC34X9::IsFIFOEmpty(void)
+bool MC34X9 IsFIFOEmpty(void)
 {
   // Read the data format register to preserve bits
   uint8_t value;
@@ -319,7 +319,7 @@ bool MC34X9::IsFIFOEmpty(void)
 }
 
 //Read the raw counts and SI units measurement data
-MC34X9_acc_t MC34X9::readRawAccel(void)
+MC34X9_acc_t MC34X9 readRawAccel(void)
 {
   //{2g, 4g, 8g, 16g, 12g}
   float faRange[5] = { 19.614f, 39.228f, 78.456f, 156.912f, 117.684f};
