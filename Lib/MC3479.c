@@ -8,217 +8,154 @@
 #define MC34X9_CFG_SAMPLE_RATE_DEFAULT    MC34X9_SR_DEFAULT_1000Hz
 #define MC34X9_CFG_RANGE_DEFAULT                MC34X9_RANGE_8G
 
-#define mcube_printf(arg) \
-  printf("%s\n", arg);
-
-#define mcube_printf_number(arg) \
-  printf("%x\n", arg);
-
 uint8_t CfgRange, CfgFifo;
 
 // SPI and I2C instances
-#define SPI_PORT spi0
 #define I2C_PORT i2c0
 
-uint8_t MC34X9 readRegister8(uint8_t reg) {
+uint8_t readRegister8(MC3479_t sens, uint8_t reg) {
   uint8_t value;
-  mcube_read_regs(M_bSpi, M_chip_select, reg, &value, 1);
+
+  i2c_write_blocking(sens.inst, sens.addr, &reg, 1, true);
+  i2c_read_blocking(sens.inst, sens.addr, &value, 1, false);
   return value;
 }
 
-void MC34X9 writeRegister8(uint8_t reg, uint8_t value) {
-  mcube_write_regs(M_bSpi, M_chip_select, reg, &value, 1);
+void writeRegister8(MC3479_t sens, uint8_t reg, uint8_t value) {
+  uint8_t data[] = {reg, value}; 
+  i2c_write_blocking(sens.inst, sens.addr, data, 2, false);
   return;
 }
 
 // Initialize the MC34X9 sensor and set as the default configuration
-bool MC34X9 start(bool bSpi, uint8_t chip_select)
-{
-  /** 0 = SPI, 1 = I2C */
-  M_bSpi = bSpi;
-  M_chip_select = chip_select;
-  if (!bSpi) {
-    mcube_printf("SPI mode");
-    // Chip select pin
-    gpio_init(chip_select);
-    gpio_set_dir(chip_select, GPIO_OUT);
-    gpio_put(chip_select, 1);
-    // Initialize SPI
-    m_drv_spi_init(E_M_DRV_INTERFACE_SPIMODE_HS);
-  } else {
-    mcube_printf("I2C mode");
-    // Initialize I2C
-    m_drv_i2c_init();
-  }
-
+bool start(MC3479_t sens){
   // Init Reset
   reset();
-  SetMode(MC34X9_MODE_STANDBY);
+  SetMode(sens, MC34X9_MODE_STANDBY);
 
   /* Check I2C connection */
-  uint8_t id = readRegister8(MC34X9_REG_PROD);
+  uint8_t id = readRegister8(sens, MC34X9_REG_PROD);
   if (id != MC34X9_CHIP_ID)
   {
     /* No MC34X9 detected ... return false */
     mcube_printf("No MC34X9 detected!");
-    mcube_printf("Chip ID: ");
-    mcube_printf_number(id);
+    printf("Chip ID: %x", id);
     return false;
   }
 
   // Range: 8g
-  SetRangeCtrl(MC34X9_CFG_RANGE_DEFAULT);
+  SetRangeCtrl(sens, MC34X9_CFG_RANGE_DEFAULT);
   // Sampling Rate: 50Hz by default
-  SetSampleRate(MC34X9_CFG_SAMPLE_RATE_DEFAULT);
+  SetSampleRate(sens, MC34X9_CFG_SAMPLE_RATE_DEFAULT);
   // Mode: Active
-  SetMode(MC34X9_MODE_CWAKE);
+  SetMode(sens, MC34X9_MODE_CWAKE);
 
   sleep_ms(50);
 
   return true;
 }
 
-void MC34X9 wake()
+void wake(MC3479_t sens)
 {
   //Set mode as wake
-  SetMode(MC34X9_MODE_CWAKE);
+  SetMode(sens, MC34X9_MODE_CWAKE);
 }
 
-void MC34X9 stop()
+void stop(MC3479_t sens)
 {
   //Set mode as Sleep
-  SetMode(MC34X9_MODE_STANDBY);
+  SetMode(sens, MC34X9_MODE_STANDBY);
 }
 
 //Initial reset
-void MC34X9 reset()
+void reset(MC3479_t sens)
 {
   // Stand by mode
-  writeRegister8(MC34X9_REG_MODE, MC34X9_MODE_STANDBY);
+  writeRegister8(sens, MC34X9_REG_MODE, MC34X9_MODE_STANDBY);
 
   sleep_ms(10);
 
   // power-on-reset
-  writeRegister8(0x1c, 0x40);
+  writeRegister8(sens, 0x1c, 0x40);
 
   sleep_ms(50);
 
   // Disable interrupt
-  writeRegister8(0x06, 0x00);
+  writeRegister8(sens, 0x06, 0x00);
   sleep_ms(10);
   // 1.00x Aanalog Gain
-  writeRegister8(0x2B, 0x00);
+  writeRegister8(sens, 0x2B, 0x00);
   sleep_ms(10);
   // DCM disable
-  writeRegister8(0x15, 0x00);
+  writeRegister8(sens, 0x15, 0x00);
 
   sleep_ms(50);
 }
 
 //Set the operation mode
-void MC34X9 SetMode(MC34X9_mode_t mode)
+void SetMode(MC3479_t sens,  MC34X9_mode_t mode)
 {
   uint8_t value;
 
-  value = readRegister8(MC34X9_REG_MODE);
+  value = readRegister8(sens, MC34X9_REG_MODE);
   value &= 0b11110000;
   value |= mode;
 
-  writeRegister8(MC34X9_REG_MODE, value);
+  writeRegister8(sens, MC34X9_REG_MODE, value);
 }
 
 //Set the range control
-void MC34X9 SetRangeCtrl(MC34X9_range_t range)
+void SetRangeCtrl(MC3479_t sens, MC34X9_range_t range)
 {
   uint8_t value;
   CfgRange = range;
-  SetMode(MC34X9_MODE_STANDBY);
-  value = readRegister8(MC34X9_REG_RANGE_C);
+  SetMode(sens, MC34X9_MODE_STANDBY);
+  value = readRegister8(sens, MC34X9_REG_RANGE_C);
   value &= 0b00000111;
   value |= (range << 4) & 0x70;
-  writeRegister8(MC34X9_REG_RANGE_C, value);
+  writeRegister8(sens, MC34X9_REG_RANGE_C, value);
 }
 
 //Set the sampling rate
-void MC34X9 SetSampleRate(MC34X9_sr_t sample_rate)
+void SetSampleRate(MC3479_t sens, MC34X9_sr_t sample_rate)
 {
   uint8_t value;
-  SetMode(MC34X9_MODE_STANDBY);
-  value = readRegister8(MC34X9_REG_SR);
+  SetMode(sens, MC34X9_MODE_STANDBY);
+  value = readRegister8(sens, MC34X9_REG_SR);
   value &= 0b00000000;
   value |= sample_rate;
-  writeRegister8(MC34X9_REG_SR, value);
-}
-
-// Set Motion feature
-void MC34X9 SetMotionCtrl(bool tilt_ctrl,
-                           bool flip_ctl,
-                           bool anym_ctl,
-                           bool shake_ctl,
-                           bool tilt_35_ctl) {
-  uint8_t CfgMotion = 0;
-
-  if (tilt_ctrl || flip_ctl) {
-    _M_DRV_MC34X6_SetTilt_Flip();
-    CfgMotion |= (((tilt_ctrl || flip_ctl) & 0x01) << MC34X9_TILT_FEAT);
-  }
-
-  if (anym_ctl) {
-    _M_DRV_MC34X6_SetAnym();
-    CfgMotion |= ((anym_ctl & 0x01) << MC34X9_ANYM_FEAT);
-  }
-
-  if (shake_ctl) {
-    _M_DRV_MC34X6_SetShake();
-    // Also enable anyMotion feature
-    CfgMotion |= ((shake_ctl & 0x01) << MC34X9_ANYM_FEAT) | ((shake_ctl & 0x01) << MC34X9_SHAKE_FEAT);
-  }
-
-  if (tilt_35_ctl) {
-    _M_DRV_MC34X6_SetTilt35();
-    // Also enable anyMotion feature
-    CfgMotion |= ((tilt_35_ctl & 0x01) << MC34X9_ANYM_FEAT) | ((tilt_35_ctl & 0x01) << MC34X9_TILT35_FEAT);
-  }
-
-  writeRegister8(MC34X9_REG_MOTION_CTRL, CfgMotion);
+  writeRegister8(sens, MC34X9_REG_SR, value);
 }
 
 //Set FIFO feature
-void MC34X9 SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl,
-                         MC34X9_fifo_mode_t fifo_mode,
-                         uint8_t fifo_thr)
-{
+void SetFIFOCtrl(MC3479_t sens, MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr){
   if (fifo_thr > 31)  //maximum threshold
     fifo_thr = 31;
 
-  SetMode(MC34X9_MODE_STANDBY);
+  SetMode(sens, MC34X9_MODE_STANDBY);
 
   CfgFifo = (MC34X9_COMB_INT_ENABLE << 3) | ((fifo_ctl << 5) | (fifo_mode << 6)) ;
 
-  writeRegister8(MC34X9_REG_FIFO_CTRL, CfgFifo);
+  writeRegister8(sens, MC34X9_REG_FIFO_CTRL, CfgFifo);
 
   uint8_t CfgFifoThr = fifo_thr;
-  writeRegister8(MC34X9_REG_FIFO_TH, CfgFifoThr);
+  writeRegister8(sens, MC34X9_REG_FIFO_TH, CfgFifoThr);
 }
 
-void MC34X9 SetGerneralINTCtrl() {
+void SetGerneralINTCtrl(MC3479_t sens) {
   // Gerneral Interrupt setup
   uint8_t CfgGPIOINT = (((MC34X9_INTR_C_IAH_ACTIVE_LOW & 0x01) << 2) // int1
                         | ((MC34X9_INTR_C_IPP_MODE_OPEN_DRAIN & 0x01) << 3)// int1
                         | ((MC34X9_INTR_C_IAH_ACTIVE_LOW & 0x01) << 6)// int2
                         | ((MC34X9_INTR_C_IPP_MODE_OPEN_DRAIN & 0x01) << 7));// int2
 
-  writeRegister8(MC34X9_REG_GPIO_CTRL, CfgGPIOINT);
+  writeRegister8(sens, MC34X9_REG_GPIO_CTRL, CfgGPIOINT);
 }
 
 //Set interrupt control register
-void MC34X9 SetINTCtrl(bool tilt_int_ctrl,
-                        bool flip_int_ctl,
-                        bool anym_int_ctl,
-                        bool shake_int_ctl,
-                        bool tilt_35_int_ctl)
-{
-  SetMode(MC34X9_MODE_STANDBY);
+void SetINTCtrl(MC3479_t sens, bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl){
+
+  SetMode(sens, MC34X9_MODE_STANDBY);
 
   uint8_t CfgINT = (((tilt_int_ctrl & 0x01) << 0)
                     | ((flip_int_ctl & 0x01) << 1)
@@ -226,34 +163,32 @@ void MC34X9 SetINTCtrl(bool tilt_int_ctrl,
                     | ((shake_int_ctl & 0x01) << 3)
                     | ((tilt_35_int_ctl & 0x01) << 4)
                     | ((MC34X9_AUTO_CLR_ENABLE & 0x01) << 6));
-  writeRegister8(MC34X9_REG_INTR_CTRL, CfgINT);
+  writeRegister8(sens, MC34X9_REG_INTR_CTRL, CfgINT);
 
-  SetGerneralINTCtrl();
+  SetGerneralINTCtrl(sens);
 }
 
 //Set FIFO interrupt control register
-void MC34X9 SetFIFOINTCtrl(bool fifo_empty_int_ctl,
-                            bool fifo_full_int_ctl,
-                            bool fifo_thr_int_ctl)
-{
-  SetMode(MC34X9_MODE_STANDBY);
+void SetFIFOINTCtrl(MC3479_t sens,  bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl){
+  
+  SetMode(MC3479_t sens, MC34X9_MODE_STANDBY);
 
   CfgFifo = CfgFifo
             | (((fifo_empty_int_ctl & 0x01) << 0)
-               | ((fifo_full_int_ctl & 0x01) << 1)
-               | ((fifo_thr_int_ctl & 0x01) << 2));
+              | ((fifo_full_int_ctl & 0x01) << 1)
+              | ((fifo_thr_int_ctl & 0x01) << 2));
 
-  writeRegister8(MC34X9_REG_FIFO_CTRL, CfgFifo);
+  writeRegister8(sens, MC34X9_REG_FIFO_CTRL, CfgFifo);
 
-  SetGerneralINTCtrl();
+  SetGerneralINTCtrl(sens);
 }
 
 //Interrupt handler (clear interrupt flag)
-void MC34X9 INTHandler(MC34X9_interrupt_event_t *ptINT_Event)
-{
+void INTHandler(MC3479_t sens, MC34X9_interrupt_event_t *ptINT_Event){
+  
   uint8_t value;
 
-  value = readRegister8(MC34X9_REG_INTR_STAT);
+  value = readRegister8(sens, MC34X9_REG_INTR_STAT);
 
   ptINT_Event->bTILT           = ((value >> 0) & 0x01);
   ptINT_Event->bFLIP           = ((value >> 1) & 0x01);
@@ -262,15 +197,15 @@ void MC34X9 INTHandler(MC34X9_interrupt_event_t *ptINT_Event)
   ptINT_Event->bTILT_35        = ((value >> 4) & 0x01);
 
   value &= 0x40;
-  writeRegister8(MC34X9_REG_INTR_STAT, value);
+  writeRegister8(sens, MC34X9_REG_INTR_STAT, value);
 }
 
 //FIFO Interrupt handler (clear interrupt flag)
-void MC34X9 FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
+void FIFOINTHandler(MC3479_t sens, MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
 {
   uint8_t value;
 
-  value = readRegister8(MC34X9_REG_FIFO_INTR);
+  value = readRegister8(sens, MC34X9_REG_FIFO_INTR);
 
   ptFIFO_INT_Event->bFIFO_EMPTY           = ((value >> 0) & 0x01);
   ptFIFO_INT_Event->bFIFO_FULL            = ((value >> 1) & 0x01);
@@ -278,35 +213,30 @@ void MC34X9 FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
 }
 
 //Get the range control
-MC34X9_range_t MC34X9 GetRangeCtrl(void)
-{
+MC34X9_range_t GetRangeCtrl(MC3479_t sens){
   // Read the data format register to preserve bits
   uint8_t value;
-  value = readRegister8(MC34X9_REG_RANGE_C);
-  mcube_printf("In GetRangeCtrl(): ");
-  mcube_printf_number(value);
+  value = readRegister8(sens, MC34X9_REG_RANGE_C);
+  printf("In GetRangeCtrl(): %x", value);
   value &= 0x70;
   return (MC34X9_range_t) (value >> 4);
 }
 
 //Get the output sampling rate
-MC34X9_sr_t MC34X9 GetSampleRate(void)
-{
+MC34X9_sr_t GetSampleRate(MC3479_t sens){
   // Read the data format register to preserve bits
   uint8_t value;
-  value = readRegister8(MC34X9_REG_SR);
-  mcube_printf("In GetCWakeSampleRate(): ");
-  mcube_printf_number(value);
+  value = readRegister8(sens, MC34X9_REG_SR);
+  mcube_printf("In GetCWakeSampleRate(): %x", value);
   value &= 0b00011111;
   return (MC34X9_sr_t) (value);
 }
 
 //Is FIFO empty
-bool MC34X9 IsFIFOEmpty(void)
-{
+bool IsFIFOEmpty(MC3479_t sens){
   // Read the data format register to preserve bits
   uint8_t value;
-  value = readRegister8(MC34X9_REG_FIFO_STAT);
+  value = readRegister8(sens, MC34X9_REG_FIFO_STAT);
   value &= 0x01;
   //Serial.println("FIFO_Status");
   //Serial.println(value, HEX);
@@ -319,8 +249,7 @@ bool MC34X9 IsFIFOEmpty(void)
 }
 
 //Read the raw counts and SI units measurement data
-MC34X9_acc_t MC34X9 readRawAccel(void)
-{
+void readRawAccel(MC3479_t sens){
   //{2g, 4g, 8g, 16g, 12g}
   float faRange[5] = { 19.614f, 39.228f, 78.456f, 156.912f, 117.684f};
   // 16bit
@@ -328,76 +257,43 @@ MC34X9_acc_t MC34X9 readRawAccel(void)
 
   byte rawData[6];
   // Read the six raw data registers into data array
-  mcube_read_regs(M_bSpi, M_chip_select, MC34X9_REG_XOUT_LSB, rawData, 6);
+  read_regs(sens, MC34X9_REG_XOUT_LSB, rawData, 6);
   x = (short)((((unsigned short)rawData[1]) << 8) | rawData[0]);
   y = (short)((((unsigned short)rawData[3]) << 8) | rawData[2]);
   z = (short)((((unsigned short)rawData[5]) << 8) | rawData[4]);
 
-  AccRaw.XAxis = (short) (x);
-  AccRaw.YAxis = (short) (y);
-  AccRaw.ZAxis = (short) (z);
-  AccRaw.XAxis_g = (float) (x) / faResolution * faRange[CfgRange];
-  AccRaw.YAxis_g = (float) (y) / faResolution * faRange[CfgRange];
-  AccRaw.ZAxis_g = (float) (z) / faResolution * faRange[CfgRange];
+  sens->XAxis = (short) (x);
+  sens->YAxis = (short) (y);
+  sens->ZAxis = (short) (z);
+  sens->XAxis_g = (float) (x) / faResolution * faRange[CfgRange];
+  sens->YAxis_g = (float) (y) / faResolution * faRange[CfgRange];
+  sens->ZAxis_g = (float) (z) / faResolution * faRange[CfgRange];
 
-  return AccRaw;
+  return;
 }
 
 // ***BUS***
-/** I2C init function */
-int m_drv_i2c_init(void)
-{
-  i2c_init(I2C_PORT, 100 * 1000); // 100 kHz
-  gpio_set_function(4, GPIO_FUNC_I2C);
-  gpio_set_function(5, GPIO_FUNC_I2C);
-  gpio_pull_up(4);
-  gpio_pull_up(5);
-  return 0;
-}
-
-/** SPI init function */
-int m_drv_spi_init(e_m_drv_interface_spimode_t spi_hs_mode)
-{
-  spi_init(SPI_PORT, 4 * 1000 * 1000); // 4 MHz
-  gpio_set_function(2, GPIO_FUNC_SPI);
-  gpio_set_function(3, GPIO_FUNC_SPI);
-  gpio_set_function(4, GPIO_FUNC_SPI);
-  return 0;
-}
 
 /** I2C/SPI read function */
-uint8_t mcube_read_regs(bool bSpi, uint8_t chip_select, uint8_t reg, uint8_t *value, uint8_t size)
+uint8_t read_regs(MC3479_t sens, uint8_t reg, uint8_t *value, uint8_t size)
 {
-  if (!bSpi) {
-    i2c_write_blocking(I2C_PORT, chip_select, &reg, 1, true);
-    i2c_read_blocking(I2C_PORT, chip_select, value, size, false);
-  } else {
-    gpio_put(chip_select, 0);
-    spi_write_blocking(SPI_PORT, &reg, 1);
-    spi_read_blocking(SPI_PORT, 0, value, size);
-    gpio_put(chip_select, 1);
-  }
+  i2c_write_blocking(sens.inst, sens.addr, &reg, 1, true);
+  i2c_read_blocking(sens.inst, sens.addr, value, size, false);
   return 0;
 }
 
 /** I2C/SPI write function */
-uint8_t mcube_write_regs(bool bSpi, uint8_t chip_select, uint8_t reg, uint8_t *value, uint8_t size)
+uint8_t mcube_write_regs(MC3479_t sens, uint8_t reg, uint8_t *value, uint8_t size)
 {
-  if (!bSpi) {
-    uint8_t buffer[size + 1];
-    buffer[0] = reg;
-    memcpy(&buffer[1], value, size);
-    i2c_write_blocking(I2C_PORT, chip_select, buffer, size + 1, false);
-  } else {
-    gpio_put(chip_select, 0);
-    spi_write_blocking(SPI_PORT, &reg, 1);
-    spi_write_blocking(SPI_PORT, value, size);
-    gpio_put(chip_select, 1);
-  }
+  uint8_t buffer[size + 1];
+  buffer[0] = reg;
+  memcpy(&buffer[1], value, size);
+  i2c_write_blocking(I2C_PORT, chip_select, buffer, size + 1, false);
   return 0;
 }
 
-// ***MC34X9 dirver motion part***
+// ***MC34X9 dirver motion part*** 
+//TODO Keep going here
 void M_DRV_MC34X6_SetTFThreshold(uint16_t threshold) {
   uint8_t _bFTThr[2] = {0};
 

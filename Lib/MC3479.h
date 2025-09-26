@@ -115,15 +115,16 @@
 #define s_bCfgFTThr 200
 #define s_bCfgFTDebounce 50
 
-struct MC34X9_acc_t
-{
+typedef struct MC3479 {
+  i2c_inst_t inst;
+  uint8_t addr;
   short XAxis;
   short YAxis;
   short ZAxis;
   float XAxis_g;
   float YAxis_g;
   float ZAxis_g;
-} ;
+} MC3479_t;
 
 typedef enum
 {
@@ -214,61 +215,40 @@ typedef struct
 }   MC34X9_fifo_interrupt_event_t;
 
 /* general accel methods */
-class MC34X9 {
-  public:
-    uint8_t readRegister8(uint8_t reg);
-    void writeRegister8(uint8_t reg, uint8_t value);
-    // Setup and begin measurements
-    bool start(bool bSpi, uint8_t chip_select);
-    // Start measurement
-    void wake();
-    // End measurement
-    void stop();
-    // Sensor reset
-    void reset();
-    void SetMode(MC34X9_mode_t mode);
-    void SetRangeCtrl(MC34X9_range_t range);
-    void SetSampleRate(MC34X9_sr_t sample_rate);
-    void SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl,
-                     MC34X9_fifo_mode_t fifo_mode,
-                     uint8_t fifo_thr);
-    void SetMotionCtrl(bool tilt_int_ctrl,
-                       bool flip_int_ctl,
-                       bool anym_int_ctl,
-                       bool shake_int_ctl,
-                       bool tilt_35_int_ctl);
-    void SetINTCtrl(bool tilt_int_ctrl,
-                    bool flip_int_ctl,
-                    bool anym_int_ctl,
-                    bool shake_int_ctl,
-                    bool tilt_35_int_ctl);
-    void SetFIFOINTCtrl(bool fifo_empty_int_ctl,
-                        bool fifo_full_int_ctl,
-                        bool fifo_thr_int_ctl);
-    void SetGerneralINTCtrl();
-    void INTHandler(MC34X9_interrupt_event_t *ptINT_Event);
-    void FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event);
-    MC34X9_range_t GetRangeCtrl(void);
-    MC34X9_sr_t GetSampleRate(void);
-    bool IsFIFOEmpty(void);
-    MC34X9_acc_t readRawAccel(void);
-
-  private:
-    bool M_bSpi;
-    uint8_t M_chip_select;
-    short x, y, z;
-    // Raw Accelerometer data
-    MC34X9_acc_t AccRaw;
-};
+uint8_t readRegister8(uint8_t reg);
+void writeRegister8(uint8_t reg, uint8_t value);
+// Setup and begin measurements
+bool start(bool bSpi, uint8_t chip_select);
+// Start measurement
+void wake();
+// End measurement
+void stop();
+// Sensor reset
+void reset();
+void SetMode(MC34X9_mode_t mode);
+void SetRangeCtrl(MC34X9_range_t range);
+void SetSampleRate(MC34X9_sr_t sample_rate);
+void SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr);
+void SetMotionCtrl(bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl);
+void SetINTCtrl(bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl);
+void SetFIFOINTCtrl(bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl);
+void SetGerneralINTCtrl();
+void INTHandler(MC34X9_interrupt_event_t *ptINT_Event);
+void FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event);
+MC34X9_range_t GetRangeCtrl(void);
+MC34X9_sr_t GetSampleRate(void);
+bool IsFIFOEmpty(void);
+MC34X9_acc_t readRawAccel(void);
+bool M_bSpi;
+uint8_t M_chip_select;
+short x, y, z;
+// Raw Accelerometer data
+MC34X9_acc_t AccRaw;
 
 // ***I2C/SPI BUS***
 // Use object to do Bus communication
 extern MC34X9 MC34X9_acc;
-#define MC34X9_acc_readRegister8(reg) \
-        MC34X9_acc.readRegister8(reg);
 
-#define MC34X9_acc_writeRegister8(reg, value) \
-        MC34X9_acc.writeRegister8(reg, value);
 typedef enum
 {
   /** SPI run under 2MHz when normal mode enable. */
