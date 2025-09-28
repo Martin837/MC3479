@@ -1,36 +1,41 @@
 // Updated to use Raspberry Pi Pico SDK instead of Arduino
 #include "MC3479.h"
 #include "pico/stdlib.h"
-#include "hardware/spi.h"
 #include "hardware/i2c.h"
+#include <stdio.h>
+#include <string.h>
 
 #define MC34X9_CFG_MODE_DEFAULT                 MC34X9_MODE_STANDBY
 #define MC34X9_CFG_SAMPLE_RATE_DEFAULT    MC34X9_SR_DEFAULT_1000Hz
 #define MC34X9_CFG_RANGE_DEFAULT                MC34X9_RANGE_8G
 
 uint8_t CfgRange, CfgFifo;
+bool M_bSpi;
+uint8_t M_chip_select;
+short x, y, z;
 
 // SPI and I2C instances
 #define I2C_PORT i2c0
+// --- Function Prototypes ---
 
-uint8_t readRegister8(MC3479_t sens, uint8_t reg) {
+uint8_t readRegister8(MC3479_t *sens, uint8_t reg) {
   uint8_t value;
 
-  i2c_write_blocking(sens.inst, sens.addr, &reg, 1, true);
-  i2c_read_blocking(sens.inst, sens.addr, &value, 1, false);
+  i2c_write_blocking(sens->inst, sens->addr, &reg, 1, true);
+  i2c_read_blocking(sens->inst, sens->addr, &value, 1, false);
   return value;
 }
 
-void writeRegister8(MC3479_t sens, uint8_t reg, uint8_t value) {
+void writeRegister8(MC3479_t *sens, uint8_t reg, uint8_t value) {
   uint8_t data[] = {reg, value}; 
-  i2c_write_blocking(sens.inst, sens.addr, data, 2, false);
+  i2c_write_blocking(sens->inst, sens->addr, data, 2, false);
   return;
 }
 
 // Initialize the MC34X9 sensor and set as the default configuration
-bool start(MC3479_t sens){
+bool start(MC3479_t *sens){
   // Init Reset
-  reset();
+  reset(sens);
   SetMode(sens, MC34X9_MODE_STANDBY);
 
   /* Check I2C connection */
@@ -38,7 +43,7 @@ bool start(MC3479_t sens){
   if (id != MC34X9_CHIP_ID)
   {
     /* No MC34X9 detected ... return false */
-    mcube_printf("No MC34X9 detected!");
+    printf("No MC34X9 detected!");
     printf("Chip ID: %x", id);
     return false;
   }
@@ -55,20 +60,20 @@ bool start(MC3479_t sens){
   return true;
 }
 
-void wake(MC3479_t sens)
+void wake(MC3479_t *sens)
 {
   //Set mode as wake
   SetMode(sens, MC34X9_MODE_CWAKE);
 }
 
-void stop(MC3479_t sens)
+void stop(MC3479_t *sens)
 {
   //Set mode as Sleep
   SetMode(sens, MC34X9_MODE_STANDBY);
 }
 
 //Initial reset
-void reset(MC3479_t sens)
+void reset(MC3479_t *sens)
 {
   // Stand by mode
   writeRegister8(sens, MC34X9_REG_MODE, MC34X9_MODE_STANDBY);
@@ -93,7 +98,7 @@ void reset(MC3479_t sens)
 }
 
 //Set the operation mode
-void SetMode(MC3479_t sens,  MC34X9_mode_t mode)
+void SetMode(MC3479_t *sens,  MC34X9_mode_t mode)
 {
   uint8_t value;
 
@@ -105,7 +110,7 @@ void SetMode(MC3479_t sens,  MC34X9_mode_t mode)
 }
 
 //Set the range control
-void SetRangeCtrl(MC3479_t sens, MC34X9_range_t range)
+void SetRangeCtrl(MC3479_t *sens, MC34X9_range_t range)
 {
   uint8_t value;
   CfgRange = range;
@@ -117,7 +122,7 @@ void SetRangeCtrl(MC3479_t sens, MC34X9_range_t range)
 }
 
 //Set the sampling rate
-void SetSampleRate(MC3479_t sens, MC34X9_sr_t sample_rate)
+void SetSampleRate(MC3479_t *sens, MC34X9_sr_t sample_rate)
 {
   uint8_t value;
   SetMode(sens, MC34X9_MODE_STANDBY);
@@ -128,7 +133,7 @@ void SetSampleRate(MC3479_t sens, MC34X9_sr_t sample_rate)
 }
 
 //Set FIFO feature
-void SetFIFOCtrl(MC3479_t sens, MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr){
+void SetFIFOCtrl(MC3479_t *sens, MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr){
   if (fifo_thr > 31)  //maximum threshold
     fifo_thr = 31;
 
@@ -142,7 +147,7 @@ void SetFIFOCtrl(MC3479_t sens, MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t f
   writeRegister8(sens, MC34X9_REG_FIFO_TH, CfgFifoThr);
 }
 
-void SetGerneralINTCtrl(MC3479_t sens) {
+void SetGerneralINTCtrl(MC3479_t *sens) {
   // Gerneral Interrupt setup
   uint8_t CfgGPIOINT = (((MC34X9_INTR_C_IAH_ACTIVE_LOW & 0x01) << 2) // int1
                         | ((MC34X9_INTR_C_IPP_MODE_OPEN_DRAIN & 0x01) << 3)// int1
@@ -153,7 +158,7 @@ void SetGerneralINTCtrl(MC3479_t sens) {
 }
 
 //Set interrupt control register
-void SetINTCtrl(MC3479_t sens, bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl){
+void SetINTCtrl(MC3479_t *sens, bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl){
 
   SetMode(sens, MC34X9_MODE_STANDBY);
 
@@ -169,9 +174,9 @@ void SetINTCtrl(MC3479_t sens, bool tilt_int_ctrl, bool flip_int_ctl, bool anym_
 }
 
 //Set FIFO interrupt control register
-void SetFIFOINTCtrl(MC3479_t sens,  bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl){
+void SetFIFOINTCtrl(MC3479_t *sens,  bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl){
   
-  SetMode(MC3479_t sens, MC34X9_MODE_STANDBY);
+  SetMode(sens, MC34X9_MODE_STANDBY);
 
   CfgFifo = CfgFifo
             | (((fifo_empty_int_ctl & 0x01) << 0)
@@ -184,7 +189,7 @@ void SetFIFOINTCtrl(MC3479_t sens,  bool fifo_empty_int_ctl, bool fifo_full_int_
 }
 
 //Interrupt handler (clear interrupt flag)
-void INTHandler(MC3479_t sens, MC34X9_interrupt_event_t *ptINT_Event){
+void INTHandler(MC3479_t *sens, MC34X9_interrupt_event_t *ptINT_Event){
   
   uint8_t value;
 
@@ -201,7 +206,7 @@ void INTHandler(MC3479_t sens, MC34X9_interrupt_event_t *ptINT_Event){
 }
 
 //FIFO Interrupt handler (clear interrupt flag)
-void FIFOINTHandler(MC3479_t sens, MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
+void FIFOINTHandler(MC3479_t *sens, MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event)
 {
   uint8_t value;
 
@@ -213,7 +218,7 @@ void FIFOINTHandler(MC3479_t sens, MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Eve
 }
 
 //Get the range control
-MC34X9_range_t GetRangeCtrl(MC3479_t sens){
+MC34X9_range_t GetRangeCtrl(MC3479_t *sens){
   // Read the data format register to preserve bits
   uint8_t value;
   value = readRegister8(sens, MC34X9_REG_RANGE_C);
@@ -223,17 +228,17 @@ MC34X9_range_t GetRangeCtrl(MC3479_t sens){
 }
 
 //Get the output sampling rate
-MC34X9_sr_t GetSampleRate(MC3479_t sens){
+MC34X9_sr_t GetSampleRate(MC3479_t *sens){
   // Read the data format register to preserve bits
   uint8_t value;
   value = readRegister8(sens, MC34X9_REG_SR);
-  mcube_printf("In GetCWakeSampleRate(): %x", value);
+  printf("In GetCWakeSampleRate(): %x", value);
   value &= 0b00011111;
   return (MC34X9_sr_t) (value);
 }
 
 //Is FIFO empty
-bool IsFIFOEmpty(MC3479_t sens){
+bool IsFIFOEmpty(MC3479_t *sens){
   // Read the data format register to preserve bits
   uint8_t value;
   value = readRegister8(sens, MC34X9_REG_FIFO_STAT);
@@ -249,13 +254,13 @@ bool IsFIFOEmpty(MC3479_t sens){
 }
 
 //Read the raw counts and SI units measurement data
-void readRawAccel(MC3479_t sens){
+void readRawAccel(MC3479_t *sens){
   //{2g, 4g, 8g, 16g, 12g}
   float faRange[5] = { 19.614f, 39.228f, 78.456f, 156.912f, 117.684f};
   // 16bit
   float faResolution = 32768.0f;
 
-  byte rawData[6];
+  uint8_t rawData[6];
   // Read the six raw data registers into data array
   read_regs(sens, MC34X9_REG_XOUT_LSB, rawData, 6);
   x = (short)((((unsigned short)rawData[1]) << 8) | rawData[0]);
@@ -275,26 +280,26 @@ void readRawAccel(MC3479_t sens){
 // ***BUS***
 
 /** I2C/SPI read function */
-uint8_t read_regs(MC3479_t sens, uint8_t reg, uint8_t *value, uint8_t size)
+uint8_t read_regs(MC3479_t *sens, uint8_t reg, uint8_t *value, uint8_t size)
 {
-  i2c_write_blocking(sens.inst, sens.addr, &reg, 1, true);
-  i2c_read_blocking(sens.inst, sens.addr, value, size, false);
+  i2c_write_blocking(sens->inst, sens->addr, &reg, 1, true);
+  i2c_read_blocking(sens->inst, sens->addr, value, size, false);
   return 0;
 }
 
 /** I2C/SPI write function */
-uint8_t mcube_write_regs(MC3479_t sens, uint8_t reg, uint8_t *value, uint8_t size)
+uint8_t mcube_write_regs(MC3479_t *sens, uint8_t reg, uint8_t *value, uint8_t size)
 {
   uint8_t buffer[size + 1];
   buffer[0] = reg;
   memcpy(&buffer[1], value, size);
-  i2c_write_blocking(I2C_PORT, chip_select, buffer, size + 1, false);
+  i2c_write_blocking(sens->inst, sens->addr, buffer, size + 1, false);
   return 0;
 }
 
 // ***MC34X9 dirver motion part*** 
 //TODO Keep going here
-void M_DRV_MC34X6_SetTFThreshold(uint16_t threshold) {
+void M_DRV_MC34X6_SetTFThreshold(MC3479_t *sens, uint16_t threshold) {
   uint8_t _bFTThr[2] = {0};
 
   _bFTThr[0] = (threshold & 0x00ff);
@@ -302,42 +307,42 @@ void M_DRV_MC34X6_SetTFThreshold(uint16_t threshold) {
 
 
   // set threshold
-  MC34X9_acc_writeRegister8(MC34X9_REG_TF_THRESH_LSB, _bFTThr[0]);
-  MC34X9_acc_writeRegister8(MC34X9_REG_TF_THRESH_MSB, _bFTThr[1]);
+  writeRegister8(sens, MC34X9_REG_TF_THRESH_LSB, _bFTThr[0]);
+  writeRegister8(sens, MC34X9_REG_TF_THRESH_MSB, _bFTThr[1]);
 }
 
-void M_DRV_MC34X6_SetTFDebounce(uint8_t debounce) {
+void M_DRV_MC34X6_SetTFDebounce(MC3479_t *sens, uint8_t debounce) {
   // set debounce
-  MC34X9_acc_writeRegister8(MC34X9_REG_TF_DB, debounce);
+  writeRegister8(sens, MC34X9_REG_TF_DB, debounce);
 }
 
-void M_DRV_MC34X6_SetANYMThreshold(uint16_t threshold) {
+void M_DRV_MC34X6_SetANYMThreshold(MC3479_t *sens, uint16_t threshold) {
   uint8_t _bANYMThr[2] = {0};
 
   _bANYMThr[0] = (threshold & 0x00ff);
   _bANYMThr[1] = ((threshold & 0x7f00) >> 8 );
 
   // set threshold
-  MC34X9_acc_writeRegister8(MC34X9_REG_AM_THRESH_LSB, _bANYMThr[0]);
-  MC34X9_acc_writeRegister8(MC34X9_REG_AM_THRESH_MSB, _bANYMThr[1]);
+  writeRegister8(sens, MC34X9_REG_AM_THRESH_LSB, _bANYMThr[0]);
+  writeRegister8(sens, MC34X9_REG_AM_THRESH_MSB, _bANYMThr[1]);
 }
 
-void M_DRV_MC34X6_SetANYMDebounce(uint8_t debounce) {
-  MC34X9_acc_writeRegister8(MC34X9_REG_AM_DB, debounce);
+void M_DRV_MC34X6_SetANYMDebounce(MC3479_t *sens, uint8_t debounce) {
+  writeRegister8(sens, MC34X9_REG_AM_DB, debounce);
 }
 
-void M_DRV_MC34X6_SetShakeThreshold(uint16_t threshold) {
+void M_DRV_MC34X6_SetShakeThreshold(MC3479_t *sens, uint16_t threshold) {
   uint8_t _bSHKThr[2] = {0};
 
   _bSHKThr[0] = (threshold & 0x00ff);
   _bSHKThr[1] = ((threshold & 0xff00) >> 8 );
 
   // set threshold
-  MC34X9_acc_writeRegister8(MC34X9_REG_SHK_THRESH_LSB, _bSHKThr[0]);
-  MC34X9_acc_writeRegister8(MC34X9_REG_SHK_THRESH_MSB, _bSHKThr[1]);
+  writeRegister8(sens, MC34X9_REG_SHK_THRESH_LSB, _bSHKThr[0]);
+  writeRegister8(sens, MC34X9_REG_SHK_THRESH_MSB, _bSHKThr[1]);
 }
 
-void M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(uint16_t threshold, uint8_t shakeCount) {
+void M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(MC3479_t *sens, uint16_t threshold, uint8_t shakeCount) {
 
   uint8_t _bSHKP2PDuration[2] = {0};
 
@@ -346,67 +351,67 @@ void M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(uint16_t threshold, uint8_t shakeCount
   _bSHKP2PDuration[1] |= ((shakeCount & 0x7) << 4);
 
   // set peak to peak duration and count
-  MC34X9_acc_writeRegister8(MC34X9_REG_PK_P2P_DUR_THRESH_LSB, _bSHKP2PDuration[0]);
-  MC34X9_acc_writeRegister8(MC34X9_REG_PK_P2P_DUR_THRESH_MSB, _bSHKP2PDuration[1]);
+  writeRegister8(sens, MC34X9_REG_PK_P2P_DUR_THRESH_LSB, _bSHKP2PDuration[0]);
+  writeRegister8(sens, MC34X9_REG_PK_P2P_DUR_THRESH_MSB, _bSHKP2PDuration[1]);
 }
 
-void M_DRV_MC34X6_SetTILT35Threshold(uint16_t threshold) {
-  M_DRV_MC34X6_SetTFThreshold(threshold);
+void M_DRV_MC34X6_SetTILT35Threshold(MC3479_t *sens, uint16_t threshold) {
+  M_DRV_MC34X6_SetTFThreshold(sens, threshold);
 }
 
-void M_DRV_MC34X6_SetTILT35Timer(uint8_t timer) {
+void M_DRV_MC34X6_SetTILT35Timer(MC3479_t *sens, uint8_t timer) {
   uint8_t value;
 
-  value = MC34X9_acc_readRegister8(MC34X9_REG_TIMER_CTRL);
+  value = readRegister8(sens, MC34X9_REG_TIMER_CTRL);
   value &= 0b11111000;
   value |= MC34X9_TILT35_2p0;
 
-  MC34X9_acc_writeRegister8(MC34X9_REG_TIMER_CTRL, timer);
+  writeRegister8(sens, MC34X9_REG_TIMER_CTRL, timer);
 }
 
 // Tilt & Flip
-void _M_DRV_MC34X6_SetTilt_Flip() {
+void _M_DRV_MC34X6_SetTilt_Flip(MC3479_t *sens) {
   // set threshold
-  M_DRV_MC34X6_SetTFThreshold(s_bCfgFTThr);
+  M_DRV_MC34X6_SetTFThreshold(sens, s_bCfgFTThr);
   // set debounce
-  M_DRV_MC34X6_SetTFDebounce(s_bCfgFTDebounce);
+  M_DRV_MC34X6_SetTFDebounce(sens, s_bCfgFTDebounce);
   return;
 }
 
 // AnyMotion
-void _M_DRV_MC34X6_SetAnym() {
+void _M_DRV_MC34X6_SetAnym(MC3479_t *sens) {
   // set threshold
-  M_DRV_MC34X6_SetANYMThreshold(s_bCfgANYMThr);
+  M_DRV_MC34X6_SetANYMThreshold(sens, s_bCfgANYMThr);
 
   // set debounce
-  M_DRV_MC34X6_SetANYMDebounce(s_bCfgANYMDebounce);
+  M_DRV_MC34X6_SetANYMDebounce(sens, s_bCfgANYMDebounce);
   return;
 }
 
 // Shake
-void _M_DRV_MC34X6_SetShake() {
+void _M_DRV_MC34X6_SetShake(MC3479_t *sens) {
   // Config anymotion
-  _M_DRV_MC34X6_SetAnym();
+  _M_DRV_MC34X6_SetAnym(sens);
 
   // Config shake
   // set threshold
-  M_DRV_MC34X6_SetShakeThreshold(s_bCfgShakeThr);
+  M_DRV_MC34X6_SetShakeThreshold(sens, s_bCfgShakeThr);
 
   // set peak to peak duration and count
-  M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(s_bCfgShakeP2PDuration, s_bCfgShakeCount);
+  M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(sens, s_bCfgShakeP2PDuration, s_bCfgShakeCount);
   return;
 }
 
 // Tilt 35
-void _M_DRV_MC34X6_SetTilt35() {
+void _M_DRV_MC34X6_SetTilt35(MC3479_t *sens) {
   // Config anymotion
-  _M_DRV_MC34X6_SetAnym();
+  _M_DRV_MC34X6_SetAnym(sens);
 
   // Config Tilt35
   // set threshold
-  M_DRV_MC34X6_SetTILT35Threshold(s_bCfgTILT35Thr);
+  M_DRV_MC34X6_SetTILT35Threshold(sens, s_bCfgTILT35Thr);
 
   //set timer
-  M_DRV_MC34X6_SetTILT35Timer(MC34X9_TILT35_2p0);
+  M_DRV_MC34X6_SetTILT35Timer(sens, MC34X9_TILT35_2p0);
   return;
 }

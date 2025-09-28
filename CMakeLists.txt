@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(MC3479 MC3479.c )
+add_executable(MC3479 MC3479.c lib/MC3479_lib.c )
 
 pico_set_program_name(MC3479 "MC3479")
 pico_set_program_version(MC3479 "0.1")

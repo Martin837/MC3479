@@ -3,8 +3,9 @@
 
 #define M_DRV_MC34X9_VERSION    "1.0.0"
 
-
-#include"hardware/i2c.h"
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
 
 //SPI pin definition
 //SS  : SCS, Active-low CS�Xchip select
@@ -21,7 +22,6 @@
 /******************************************************************************
 *** Motion threshold and debounce config
  *****************************************************************************/
-#define s_bCfgFTThr               100
 #define s_bCfgFTDebounce          50
 
 #define s_bCfgANYMThr             200
@@ -116,7 +116,7 @@
 #define s_bCfgFTDebounce 50
 
 typedef struct MC3479 {
-  i2c_inst_t inst;
+  i2c_inst_t *inst;
   uint8_t addr;
   short XAxis;
   short YAxis;
@@ -215,40 +215,43 @@ typedef struct
 }   MC34X9_fifo_interrupt_event_t;
 
 /* general accel methods */
-uint8_t readRegister8(uint8_t reg);
-void writeRegister8(uint8_t reg, uint8_t value);
-// Setup and begin measurements
-bool start(bool bSpi, uint8_t chip_select);
-// Start measurement
-void wake();
-// End measurement
-void stop();
-// Sensor reset
-void reset();
-void SetMode(MC34X9_mode_t mode);
-void SetRangeCtrl(MC34X9_range_t range);
-void SetSampleRate(MC34X9_sr_t sample_rate);
-void SetFIFOCtrl(MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr);
-void SetMotionCtrl(bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl);
-void SetINTCtrl(bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl);
-void SetFIFOINTCtrl(bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl);
-void SetGerneralINTCtrl();
-void INTHandler(MC34X9_interrupt_event_t *ptINT_Event);
-void FIFOINTHandler(MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event);
-MC34X9_range_t GetRangeCtrl(void);
-MC34X9_sr_t GetSampleRate(void);
-bool IsFIFOEmpty(void);
-MC34X9_acc_t readRawAccel(void);
-bool M_bSpi;
-uint8_t M_chip_select;
-short x, y, z;
-// Raw Accelerometer data
-MC34X9_acc_t AccRaw;
+uint8_t readRegister8(MC3479_t *sens, uint8_t reg);
+void writeRegister8(MC3479_t *sens, uint8_t reg, uint8_t value);
+bool start(MC3479_t *sens);
+void wake(MC3479_t *sens);
+void stop(MC3479_t *sens);
+void reset(MC3479_t *sens);
+void SetMode(MC3479_t *sens, MC34X9_mode_t mode);
+void SetRangeCtrl(MC3479_t *sens, MC34X9_range_t range);
+void SetSampleRate(MC3479_t *sens, MC34X9_sr_t sample_rate);
+void SetFIFOCtrl(MC3479_t *sens, MC34X9_fifo_ctl_t fifo_ctl, MC34X9_fifo_mode_t fifo_mode, uint8_t fifo_thr);
+void SetGerneralINTCtrl(MC3479_t *sens);
+void SetINTCtrl(MC3479_t *sens, bool tilt_int_ctrl, bool flip_int_ctl, bool anym_int_ctl, bool shake_int_ctl, bool tilt_35_int_ctl);
+void SetFIFOINTCtrl(MC3479_t *sens, bool fifo_empty_int_ctl, bool fifo_full_int_ctl, bool fifo_thr_int_ctl);
+void INTHandler(MC3479_t *sens, MC34X9_interrupt_event_t *ptINT_Event);
+void FIFOINTHandler(MC3479_t *sens, MC34X9_fifo_interrupt_event_t *ptFIFO_INT_Event);
+MC34X9_range_t GetRangeCtrl(MC3479_t *sens);
+MC34X9_sr_t GetSampleRate(MC3479_t *sens);
+bool IsFIFOEmpty(MC3479_t *sens);
+void readRawAccel(MC3479_t *sens);
+uint8_t read_regs(MC3479_t *sens, uint8_t reg, uint8_t *value, uint8_t size);
+uint8_t mcube_write_regs(MC3479_t *sens, uint8_t reg, uint8_t *value, uint8_t size);
+void M_DRV_MC34X6_SetTFThreshold(MC3479_t *sens, uint16_t threshold);
+void M_DRV_MC34X6_SetTFDebounce(MC3479_t *sens, uint8_t debounce);
+void M_DRV_MC34X6_SetANYMThreshold(MC3479_t *sens, uint16_t threshold);
+void M_DRV_MC34X6_SetANYMDebounce(MC3479_t *sens, uint8_t debounce);
+void M_DRV_MC34X6_SetShakeThreshold(MC3479_t *sens, uint16_t threshold);
+void M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(MC3479_t *sens, uint16_t threshold, uint8_t shakeCount);
+void M_DRV_MC34X6_SetTILT35Threshold(MC3479_t *sens, uint16_t threshold);
+void M_DRV_MC34X6_SetTILT35Timer(MC3479_t *sens, uint8_t timer);
+void _M_DRV_MC34X6_SetTilt_Flip(MC3479_t *sens);
+void _M_DRV_MC34X6_SetAnym(MC3479_t *sens);
+void _M_DRV_MC34X6_SetShake(MC3479_t *sens);
+void _M_DRV_MC34X6_SetTilt35(MC3479_t *sens);
+// --- End Prototypes ---
 
 // ***I2C/SPI BUS***
 // Use object to do Bus communication
-extern MC34X9 MC34X9_acc;
-
 typedef enum
 {
   /** SPI run under 2MHz when normal mode enable. */
@@ -258,18 +261,6 @@ typedef enum
   E_M_DRV_INTERFACE_SPIMODE_END,
 }   e_m_drv_interface_spimode_t;
 
-// Bus Protocol init
-int m_drv_i2c_init(void);
-int m_drv_spi_init(e_m_drv_interface_spimode_t spi_hs_mode);
-
-// Bus function
-uint8_t mcube_write_regs(bool bSpi, uint8_t chip_select, uint8_t reg, \
-                         uint8_t *value, uint8_t size);
-uint8_t mcube_read_regs( bool bSpi, uint8_t chip_select, uint8_t reg, \
-                         uint8_t *value, uint8_t size);
-
-uint8_t _readRegister8(bool bSpi, uint8_t chip_select, uint8_t reg);
-void _writeRegister8(bool bSpi, uint8_t chip_select, uint8_t reg, uint8_t value);
 
 // ***MC34X9 dirver motion part***
 typedef enum
@@ -284,17 +275,4 @@ typedef enum
   MC34X9_TILT35_3p0           = 0b111
 } MC34X9_TILT35_DURATION_TIMER_t;
 
-void M_DRV_MC34X6_SetTFThreshold(uint16_t threshold);
-void M_DRV_MC34X6_SetTFDebounce(uint8_t debounce);
-void M_DRV_MC34X6_SetANYMThreshold(uint16_t threshold);
-void M_DRV_MC34X6_SetANYMDebounce(uint8_t debounce);
-void M_DRV_MC34X6_SetShakeThreshold(uint16_t threshold);
-void M_DRV_MC34X6_SetShake_P2P_DUR_THRESH(uint16_t threshold, uint8_t shakeCount);
-void M_DRV_MC34X6_SetTILT35Threshold(uint16_t threshold);
-void M_DRV_MC34X6_SetTILT35Timer(uint8_t timer);
-
-void _M_DRV_MC34X6_SetTilt_Flip();
-void _M_DRV_MC34X6_SetAnym();
-void _M_DRV_MC34X6_SetShake();
-void _M_DRV_MC34X6_SetTilt35();
 #endif
